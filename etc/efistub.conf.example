@@ -1,0 +1,4 @@
+start-bootnum: 0000
+disk: /dev/sda
+partnum: 1
+default-mdline: root=/dev/sda2 rw initrd=\initramfs-linux.img
