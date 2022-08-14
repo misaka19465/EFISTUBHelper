@@ -1,0 +1,65 @@
+#!/bin/bash
+CONFIG=/etc/efistub.conf
+
+if [[ ! -s "${CONFIG}" ]];then
+    echo -e "\033[31m Error: config does not exist or empty \033[0m" >&2
+    exit -1
+fi
+
+startBootnum=$(eval echo $(awk -F: '/^start\-bootnum/{print $2}' "${CONFIG}"))
+disk=$(eval echo $(awk -F: '/^disk/{print $2}' "${CONFIG}"))
+partnum=$(eval echo $(awk -F: '/^partnum/{print $2}' "${CONFIG}"))
+defaultCmdline=$(eval echo $(awk -F: '/^default-cmdline/{print $2}' "${CONFIG}"))
+
+if [ -z "${startBootnum}" ];then
+    echo -e "\033[31m Error: No start-bootnum specified. \033[0m" >&2
+    exit -2
+fi
+
+if [ -z "${disk}" ];then
+    echo -e "\033[31m Error: No disk specified. \033[0m" >&2
+    exit -2
+fi
+
+if [ -z "${partnum}" ];then
+    echo -e "\033[31m Error: No partnum specified. \033[0m" >&2
+    exit -2
+fi
+
+if [ -z "${defaultCmdline}" ];then
+    echo -e "\033[31m Error: No default-cmdline specified. \033[0m" >&2
+    exit -2
+fi
+
+bootnum="${startBootnum}"
+for i in /boot/vmlinuz-*
+do
+    configEach=/etc/efistub.d/${i: 14}.conf
+    if [[ -s "${configEach}" ]];then
+        cmdline=$(eval echo $(awk -F: '/^cmdline/{print $2}' "${configEach}"))
+        label=$(eval echo $(awk -F: '/^label/{print $2}' "${configEach}"))
+
+        if [ -z "${label}" ];then
+            label=${i: 14}
+            echo -e "\033[33m Warning: ${configEach}: No label specified. Using ${i: 14}. \033[0m"
+        fi
+
+        if [ -z "${cmdline}" ];then
+            echo -e "\033[31m Error: ${configEach}: No cmdline specified. \033[0m" >&2
+            exit -3
+        fi
+    else
+        cmdline="${defaultCmdline}"
+        label=${i: 14}
+        echo -e "\033[33m Warning: No config for &i. Using defaults. \033[0m"
+    fi
+
+    efibootmgr -q -b ${bootnum} -B
+    efibootmgr -q -b ${bootnum} --disk ${disk} --part ${partnum} --create --label "${label}" --loader ${i} --unicode "${cmdline}" --verbose
+
+    echo "Updated ${i}. Label: ${label}, cmdline: ${cmdline}"
+
+    bootnum=$(expr ${bootnum} + 1)
+done
+
+echo -e "\e[32m Complete! \e[0m"
