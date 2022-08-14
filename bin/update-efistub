@@ -2,7 +2,7 @@
 CONFIG=/etc/efistub.conf
 
 if [[ ! -s "${CONFIG}" ]];then
-    echo -e "\033[31m Error: config does not exist or empty \033[0m" >&2
+    echo -e "\033[31m Error: config does not exist or empty. \033[0m" >&2
     exit -1
 fi
 
@@ -32,16 +32,21 @@ if [ -z "${defaultCmdline}" ];then
 fi
 
 bootnum="${startBootnum}"
-for i in /boot/vmlinuz-*
+for i in /boot/vmlinuz*
 do
-    configEach=/etc/efistub.d/${i: 14}.conf
+    if [[ ${i} == "/boot/vmlinuz" ]];then
+        kernel="default"
+    else
+        kernel=${i: 14}
+    fi
+    configEach=/etc/efistub.d/${kernel}.conf
     if [[ -s "${configEach}" ]];then
         cmdline=$(eval echo $(awk -F: '/^cmdline/{print $2}' "${configEach}"))
         label=$(eval echo $(awk -F: '/^label/{print $2}' "${configEach}"))
 
         if [ -z "${label}" ];then
             label=${i: 14}
-            echo -e "\033[33m Warning: ${configEach}: No label specified. Using ${i: 14}. \033[0m"
+            echo -e "\033[33m Warning: ${configEach}: No label specified. Using ${kernel}. \033[0m"
         fi
 
         if [ -z "${cmdline}" ];then
@@ -50,14 +55,22 @@ do
         fi
     else
         cmdline="${defaultCmdline}"
-        label=${i: 14}
+        label=${kernel}
         echo -e "\033[33m Warning: No config for &i. Using defaults. \033[0m"
     fi
+    initramfs="initramfs-${kernel}"
+
+    if [ ! -s "${initramfs}" ];then
+        echo -e "\033[31m Error: ${initramfs} does not exist or empty. \033[0m" >&2
+        exit -4
+    fi
+
+    cmdline="${cmdline} initrd=\\${initramfs}"
 
     efibootmgr -q -b ${bootnum} -B
-    efibootmgr -q -b ${bootnum} --disk ${disk} --part ${partnum} --create --label "${label}" --loader ${i} --unicode "${cmdline}" --verbose
+    efibootmgr -q -b ${bootnum} --disk ${disk} --part ${partnum} --create --label "${label}" --loader ${i: 6} --unicode "${cmdline}" --verbose
 
-    echo "Updated ${i}. Label: ${label}, cmdline: ${cmdline}"
+    echo "Updated ${i: 6}. Label: ${label}, cmdline: ${cmdline}"
 
     bootnum=$(expr ${bootnum} + 1)
 done
