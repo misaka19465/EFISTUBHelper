@@ -31,6 +31,16 @@ if [ -z "${defaultCmdline}" ];then
     exit -2
 fi
 
+if [[ -s "/boot/intel-ucode.img" ]];then
+    ucode="initrd=\\intel-ucode.img"
+    echo -e "\e[32m Found intel ucode. \e[0m"
+fi
+
+if [[ -s "/boot/amd-ucode.img" ]];then
+    ucode="${ucode} initrd=\\intel-ucode.img"
+    echo -e "\e[32m Found amd ucode. \e[0m"
+fi
+
 bootnum="${startBootnum}"
 for i in /boot/vmlinuz*
 do
@@ -65,7 +75,7 @@ do
         exit -4
     fi
 
-    cmdline="${cmdline} initrd=\\${initramfs}"
+    cmdline="${cmdline} ${ucode} initrd=\\${initramfs}"
 
     efibootmgr -q -b ${bootnum} -B
     efibootmgr -q -b ${bootnum} --disk ${disk} --part ${partnum} --create --label "${label}" --loader ${i: 6} --unicode "${cmdline}"
