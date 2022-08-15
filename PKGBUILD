@@ -1,3 +1,4 @@
+# Maintainer: Misaka 19465 <misaka19465@olddoctor.net>
 pkgname="efistub-helper"
 pkgdesc="An easy way to update EFISTUB configuration"
 url="https://github.com/misaka19465/EFISTUBHelper"
