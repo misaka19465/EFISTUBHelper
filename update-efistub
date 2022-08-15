@@ -55,6 +55,15 @@ if [[ -s "${esp}/amd-ucode.img" ]];then
     echo -e "\e[32mFound amd ucode. \e[0m"
 fi
 
+# Clean old EFI entries
+bootnum="${startBootnum}"
+while [[ -z ${err} ]]
+do
+    err=$(efibootmgr -q -b ${bootnum} -B 2>&1)
+    bootnum=$(expr ${bootnum} + 1)
+done
+
+
 # Check if secure boot is supported.
 sb=n
 sbsign=$(which sbsign)
@@ -63,11 +72,27 @@ if [[ -x "${sbsign}" ]];then
     signcert=$(eval echo $(awk -F: '/^sign-cert/{print $2}' "${CONFIG}"))
     if [[ -s "${signkey}" ]];then
         if [[ -s "${signcert}" ]];then
-            echo -e "\033[32mSecure Boot enabled. \033[0m"
-            if [ -z $(ls ${esp}/*.cer 2>/dev/null) ];then
-                echo -e "\033[33mWarning: Secure Boot cert file not exist in ESP partition. If you know what you are doing, ignore this. \033[0m"
+            if [[ -s /usr/share/shim-signed ]];then
+                echo -e "\033[32mSecure Boot enabled. \033[0m"
+                if [ -z $(ls ${esp}/*.cer 2>/dev/null) ];then
+                    echo -e "\033[33mWarning: Secure Boot cert file not exist in ESP partition. If you know what you are doing, ignore this. \033[0m"
+                fi
+
+                mkdir -p ${esp}/EFI/BOOT
+                if [[ ! -s ${esp}/EFI/BOOT/BOOTXx64.EFI ]];then
+                    cp /usr/share/shim-signed/shimx64.efi ${esp}/EFI/BOOT/BOOTX64.EFI
+                fi
+                if [[ ! -s ${esp}/EFI/BOOT/mmx64.efi ]];then
+                    cp /usr/share/shim-signed/mmx64.efi ${esp}/EFI/BOOT/mmx64.efi
+                fi
+                if [[ ! -s ${esp}/EFI/BOOT/fbx64.efi ]];then
+                    cp /usr/share/shim-signed/fbx64.efi ${esp}/EFI/BOOT/fbx64.efi
+                fi
+                efibootmgr -q -b 0000 --disk ${disk} --part ${partnum} --create --label "Shim" --loader "EFI/BOOT/BOOTX64.EFI"
+                sb=y
+            else
+                echo -e "\033[33mWarning: shim-signed not found. \033[0m"
             fi
-            sb=y
         else
             echo -e "\033[33mWarning: Secure Boot cert file not specified or not exist. \033[0m"
         fi
@@ -75,14 +100,6 @@ if [[ -x "${sbsign}" ]];then
         echo -e "\033[33mWarning: Secure Boot key file not specified or not exist. \033[0m"
     fi
 fi
-
-# Clean old EFI entries
-bootnum="${startBootnum}"
-while [[ -z ${err} ]]
-do
-    err=$(efibootmgr -q -b ${bootnum} -B 2>&1)
-    bootnum=$(expr ${bootnum} + 1)
-done
 
 # Generate EFI entries.
 bootnum="${startBootnum}"
@@ -130,11 +147,17 @@ do
 
     cmdline="${cmdline} ${ucode} initrd=\\${initramfs}"
 
-    # Sign vmlinuz
     if [[ ${sb} == "y" ]];then
-        ${sbsign} --key "${signkey}" --cert "${signcert}" --output "${i}.signed" "${i}"
+        # Sign vmlinuz
+        if [[ -d ${esp}/EFI/${kernel} ]];then
+            rm -r ${esp}/EFI/${kernel}
+        fi
+        mkdir ${esp}/EFI/${kernel}
+        ${sbsign} --key "${signkey}" --cert "${signcert}" --output "${esp}/EFI/${kernel}/${i: 6}.signed" "${i}"
         echo -e "\033[32m${i} signed. \033[0m"
-        efibootmgr -q -b ${bootnum} --disk ${disk} --part ${partnum} --create --label "${label}" --loader "${i: 6}.signed" --unicode "${cmdline}"
+
+        # Add shim entriy
+        echo "\"${i: 6}.signed\",\"${label}\",\"${cmdline}\",\"${label}\"" > ${esp}/EFI/${kernel}/BOOTX64.CSV
     else
         efibootmgr -q -b ${bootnum} --disk ${disk} --part ${partnum} --create --label "${label}" --loader "${i: 6}" --unicode "${cmdline}"
     fi
