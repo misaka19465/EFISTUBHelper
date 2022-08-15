@@ -1,0 +1,4 @@
+start-bootnum: 0000
+disk: /dev/sda
+partnum: 1
+default-cmdline: root=/dev/sda2 rw
