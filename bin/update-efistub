@@ -68,7 +68,7 @@ do
     cmdline="${cmdline} initrd=\\${initramfs}"
 
     efibootmgr -q -b ${bootnum} -B
-    efibootmgr -q -b ${bootnum} --disk ${disk} --part ${partnum} --create --label "${label}" --loader ${i: 6} --unicode "${cmdline}" --verbose
+    efibootmgr -q -b ${bootnum} --disk ${disk} --part ${partnum} --create --label "${label}" --loader ${i: 6} --unicode "${cmdline}"
 
     echo "Updated ${i: 6}. Label: ${label}, cmdline: ${cmdline}"
 
